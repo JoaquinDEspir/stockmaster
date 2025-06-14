@@ -80,8 +80,9 @@ export default function DeleteProveedorArticulo() {
 
   return (
     <div className="container my-4">
-      <h4>🗑️ Dar de baja Proveedor-Artículo</h4>
-
+      <h4 className="text-center mb-5">🗑️ Dar de baja Proveedor-Artículo</h4>
+      
+      <text className="form-text mb-3">Seleccione un Articulo</text>
       <select className="form-select mb-2" value={articuloId} onChange={(e) => setArticuloId(e.target.value)}>
         <option value="">Seleccionar artículo</option>
         {articulos.map((a) => (
@@ -89,6 +90,7 @@ export default function DeleteProveedorArticulo() {
         ))}
       </select>
 
+      <text className="form-text mb-3">Seleccione un Proveedor</text>
       <select className="form-select mb-3" value={proveedorId} onChange={(e) => setProveedorId(e.target.value)}>
         <option value="">Seleccionar proveedor</option>
         {proveedores.map((p) => (
@@ -96,13 +98,15 @@ export default function DeleteProveedorArticulo() {
         ))}
       </select>
 
-      <button
-        className="btn btn-danger"
-        onClick={handleDelete}
-        disabled={!articuloId || !proveedorId}
-      >
-        Dar de baja
-      </button>
+      <div className="text-center mb-4 mt-5">
+        <button
+          className="btn btn-danger px-4 py-2"
+          onClick={handleDelete}
+          disabled={!articuloId || !proveedorId}
+        >
+          Dar de baja
+        </button>
+      </div>
     </div>
   );
 }

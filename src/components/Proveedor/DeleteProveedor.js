@@ -30,7 +30,7 @@ export default function DeleteProveedor() {
   }, []);
 
   const validarBaja = async (idProveedor) => {
-    // 🔍 1. Verificar si es proveedor predeterminado en algún artículo
+    //Verificar si es proveedor predeterminado en algún artículo
     const artSnap = await getDocs(collection(db, "Articulos"));
     for (const art of artSnap.docs) {
       const subSnap = await getDocs(
@@ -47,7 +47,7 @@ export default function DeleteProveedor() {
       }
     }
 
-    // 🔍 2. Verificar si tiene órdenes de compra activas (solo "pendiente" o "enviada")
+    //Verificar si tiene órdenes de compra activas (solo "pendiente" o "enviada")
     const ocSnap = await getDocs(
       query(collection(db, "OrdenCompra"), where("codProveedor", "==", idProveedor))
     );
@@ -90,8 +90,9 @@ export default function DeleteProveedor() {
 
   return (
     <div className="container my-4">
-      <h4>🗑️ Dar de baja Proveedor</h4>
+      <h4 className="text-center mb-5">🗑️ Dar de baja Proveedor</h4>
 
+      <text className="form-text mb-3">Seleccione un Proveedor</text>
       <select
         className="form-select mb-3"
         value={selectedId}
@@ -103,13 +104,15 @@ export default function DeleteProveedor() {
         ))}
       </select>
 
-      <button
-        className="btn btn-danger"
-        onClick={handleDelete}
-        disabled={!selectedId}
-      >
-        Dar de baja
-      </button>
+      <div className="text-center mb-4 mt-5">
+        <button
+          className="btn btn-danger px-4 py-2"
+          onClick={handleDelete}
+          disabled={!selectedId}
+        >
+          Dar de baja
+        </button>
+      </div>
     </div>
   );
 }

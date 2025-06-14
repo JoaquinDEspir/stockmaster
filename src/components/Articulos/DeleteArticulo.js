@@ -55,14 +55,19 @@ export default function DeleteArticulo() {
 
   return (
     <div className="container my-4">
-      <h4>🗑️ Dar de baja Artículo</h4>
+      <h4 className="text-center mb-5">🗑️ Dar de baja Artículo</h4>
+
+      <text className="form-text mb-3">Seleccione un Articulo</text>
       <select className="form-select mb-3" value={selectedId} onChange={(e) => setSelectedId(e.target.value)}>
         <option value="">Seleccionar artículo</option>
         {articulos.map((a) => (
           <option key={a.id} value={a.id}>{a.nombre}</option>
         ))}
       </select>
-      <button className="btn btn-danger" onClick={handleDelete} disabled={!selectedId}>Dar de baja</button>
+
+      <div className="text-center mb-4 mt-5">
+        <button className="btn btn-danger px-4 py-2" onClick={handleDelete} disabled={!selectedId}>Dar de baja</button>
+      </div>
     </div>
   );
 }

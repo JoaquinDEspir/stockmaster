@@ -4,8 +4,10 @@ import db from "../../firebase";
 
 export default function AddModeloInventario() {
   const [articulos, setArticulos] = useState([]);
-  const [modelo, setModelo] = useState("Lote Fijo");
+  const [modelo, setModelo] = useState("");
   const [articuloId, setArticuloId] = useState("");
+
+  const modeloDeInventario =  ["Lote Fijo", "Periodo Fijo"];
 
   useEffect(() => {
     const fetchArticulos = async () => {
@@ -112,6 +114,18 @@ export default function AddModeloInventario() {
 
         <div className="mb-3">
           <label className="form-label">Modelo</label>
+          <select
+            className="form-select"
+            value={articuloId}
+            onChange={(e) => setArticuloId(e.target.value)}
+          >
+            <option value="">Selecciona un artículo</option>
+            {articulos.map((art) => (
+              <option key={art.id} value={art.id}>
+                {art.nombre}
+              </option>
+            ))}
+          </select>
           <input
             type="text"
             className="form-control"

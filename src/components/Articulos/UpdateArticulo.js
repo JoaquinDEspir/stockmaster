@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { collection, getDocs, doc, getDoc, updateDoc } from "firebase/firestore";
 import db from "../../firebase";
 
+
 export default function UpdateArticulo() {
   const [articulos, setArticulos] = useState([]);
   const [selectedId, setSelectedId] = useState("");
@@ -47,8 +48,8 @@ export default function UpdateArticulo() {
     await updateDoc(ref, {
       ...articulo,
       costoAlmacenamientoArticulo: parseFloat(articulo.costoAlmacenamientoArticulo),
-      costoCompra: parseFloat(articulo.costoCompra),
-      costoPedidoArticulo: parseFloat(articulo.costoPedidoArticulo),
+      //costoCompra: parseFloat(articulo.costoCompra),
+      //costoPedidoArticulo: parseFloat(articulo.costoPedidoArticulo),
       demandaArticulo: parseInt(articulo.demandaArticulo),
       stockActualArticulo: parseInt(articulo.stockActualArticulo),
     });
@@ -57,10 +58,14 @@ export default function UpdateArticulo() {
 
   return (
     <div className="container my-4">
-      <h4>✏️ Actualizar Artículo</h4>
+      <h4 className="text-center mb-5">✏️ Actualizar Artículo</h4>
+      
+      <p className="text-secondary mb-1">
+        Seleccioná un artículo para actualizar sus datos
+      </p>
 
       <select
-        className="form-select mb-3"
+        className="form-select mb-5"
         value={selectedId}
         onChange={(e) => setSelectedId(e.target.value)}
       >
@@ -87,7 +92,7 @@ export default function UpdateArticulo() {
             <div className="col-sm-9">
               <input className="form-control"
                 value={articulo.descripcionArticulo}
-                onChange={(e) => setArticulo({ ...articulo, descripcionArticulo: e.target.value })}
+                onChange={(e) =>setArticulo({ ...articulo, descripcionArticulo: e.target.value })}
               />
             </div>
           </div>
@@ -97,28 +102,14 @@ export default function UpdateArticulo() {
             <div className="col-sm-9">
               <input className="form-control" type="number"
                 value={articulo.costoAlmacenamientoArticulo}
-                onChange={(e) => setArticulo({ ...articulo, costoAlmacenamientoArticulo: e.target.value })}
-              />
-            </div>
-          </div>
-
-          <div className="mb-3 row">
-            <label className="col-sm-3 col-form-label">Costo compra</label>
-            <div className="col-sm-9">
-              <input className="form-control" type="number"
-                value={articulo.costoCompra}
-                onChange={(e) => setArticulo({ ...articulo, costoCompra: e.target.value })}
-              />
-            </div>
-          </div>
-
-          <div className="mb-3 row">
-            <label className="col-sm-3 col-form-label">Costo pedido</label>
-            <div className="col-sm-9">
-              <input className="form-control" type="number"
-                value={articulo.costoPedidoArticulo}
-                onChange={(e) => setArticulo({ ...articulo, costoPedidoArticulo: e.target.value })}
-              />
+                onChange={(e) => {
+                  const valor = e.target.value;
+                  if (valor < 0) {
+                    alert("El costo de almacenamiento no puede ser negativo");
+                  } else {
+                    setArticulo({ ...articulo, costoAlmacenamientoArticulo: e.target.value })
+                  }
+                }}/>
             </div>
           </div>
 
@@ -127,8 +118,14 @@ export default function UpdateArticulo() {
             <div className="col-sm-9">
               <input className="form-control" type="number"
                 value={articulo.demandaArticulo}
-                onChange={(e) => setArticulo({ ...articulo, demandaArticulo: e.target.value })}
-              />
+                onChange={(e) => {
+                  const valor = e.target.value;
+                if (valor < 0) {
+                  alert("La demanda no puede ser negativa");
+                } else {
+                  setArticulo({ ...articulo, demandaArticulo: e.target.value })
+                }                
+                }}/>
             </div>
           </div>
 
@@ -137,12 +134,21 @@ export default function UpdateArticulo() {
             <div className="col-sm-9">
               <input className="form-control" type="number"
                 value={articulo.stockActualArticulo}
-                onChange={(e) => setArticulo({ ...articulo, stockActualArticulo: e.target.value })}
-              />
+                onChange={(e) => {
+                  const valor = e.target.value;
+                  if (valor < 0) {
+                    alert("El stock no puede ser negativo");
+                  } else {
+                  setArticulo({ ...articulo, stockActualArticulo: e.target.value })
+                  }
+                }}/>
             </div>
           </div>
 
-          <button className="btn btn-warning">Actualizar</button>
+          <div className="text-center mb-4 mt-5">
+            <button className="btn btn-warning px-4 py-2">Actualizar</button>
+          </div>
+
         </form>
       )}
     </div>
