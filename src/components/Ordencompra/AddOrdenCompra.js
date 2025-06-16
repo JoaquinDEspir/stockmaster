@@ -131,7 +131,9 @@ export default function AddOrdenPorArticulo() {
       const ordenRef = await addDoc(collection(db, "OrdenCompra"), {
         fechaHoraOrdenCompra: fecha,
         codProveedor: articulo.proveedorPredeterminado,
+        nombreProveedor: articulo.nombreProveedor,
         codArticulo: articulo.id,
+        nombreArticulo: articulo.nombre,
         numeroDeOrdenCompra,
       });
 
