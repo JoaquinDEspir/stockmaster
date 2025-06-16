@@ -164,11 +164,11 @@ export default function UpdateEstadoOrdenCompra() {
       );
       for (const art of articulosSnap.docs) {
         const { codArticulo, cantidad } = art.data();
-        const artDoc = await getDoc(doc(db, "Articulos", codArticulo));
+        const artDoc = await getDoc(doc(db, "Articulo", codArticulo));
         if (!artDoc.exists()) continue;
         const articulo = artDoc.data();
         const nuevoStock = (articulo.stockActualArticulo || 0) + (cantidad || 0);
-        await updateDoc(doc(db, "Articulos", codArticulo), {
+        await updateDoc(doc(db, "Articulo", codArticulo), {
           stockActualArticulo: nuevoStock,
         });
         const qModelo = query(

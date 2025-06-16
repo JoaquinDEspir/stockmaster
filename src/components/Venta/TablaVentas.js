@@ -10,7 +10,7 @@ export default function TablaVentas() {
   useEffect(() => {
     const fetchVentas = async () => {
       // 1. Traer todos los artículos y armar el mapa id -> nombre, solo activos
-      const artSnap = await getDocs(collection(db, "Articulos"));
+      const artSnap = await getDocs(collection(db, "Articulo"));
       const nombres = {};
       const activos = {};
       artSnap.docs.forEach(d => {

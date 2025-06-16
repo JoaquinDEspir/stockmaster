@@ -14,7 +14,7 @@ export default function TablaOrdenesCompra() {
     const fetchData = async () => {
       const [provSnap, artSnap, ordenSnap] = await Promise.all([
         getDocs(collection(db, "Proveedor")),
-        getDocs(collection(db, "Articulos")),
+        getDocs(collection(db, "Articulo")),
         getDocs(collection(db, "OrdenCompra")),
       ]);
 

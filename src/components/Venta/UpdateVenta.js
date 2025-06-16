@@ -28,7 +28,7 @@ export default function UpdateVenta() {
       // Solo guardamos ventas por ahora, filtraremos después
       setVentas(ventaSnap.docs.map((d) => ({ id: d.id })));
 
-      const artSnap = await getDocs(collection(db, "Articulos"));
+      const artSnap = await getDocs(collection(db, "Articulo"));
       // Solo artículos activos
       const activos = {};
       const listaArticulos = artSnap.docs
@@ -75,7 +75,7 @@ export default function UpdateVenta() {
 
       const stockBackup = {};
       for (const item of lista) {
-        const artRef = doc(db, "Articulos", item.codArticulo);
+        const artRef = doc(db, "Articulo", item.codArticulo);
         const artSnap = await getDoc(artRef);
         if (artSnap.exists()) {
           stockBackup[item.codArticulo] = {
@@ -117,7 +117,7 @@ export default function UpdateVenta() {
         const detalles = await getDocs(collection(db, "OrdenCompra", oc.id, "DetalleOrdenCompra"));
         for (const det of detalles.docs) {
           const articulos = await getDocs(
-            collection(db, "OrdenCompra", oc.id, "DetalleOrdenCompra", det.id, "articulos")
+            collection(db, "OrdenCompra", oc.id, "DetalleOrdenCompra", det.id, "Articulo")
           );
           if (articulos.docs.some((a) => a.id === codArticulo)) return true;
         }
@@ -153,7 +153,7 @@ export default function UpdateVenta() {
       const previo = stockOriginal[cod]?.previo || 0;
       const diff = nuevo - previo;
 
-      const artRef = doc(db, "Articulos", cod);
+      const artRef = doc(db, "Articulo", cod);
       const artSnap = await getDoc(artRef);
       const stockActual = artSnap.data().stockActualArticulo || 0;
 
@@ -174,7 +174,7 @@ export default function UpdateVenta() {
       const previo = stockOriginal[cod]?.previo || 0;
       const diff = nuevo - previo;
 
-      const artRef = doc(db, "Articulos", cod);
+      const artRef = doc(db, "Articulo", cod);
       await updateDoc(artRef, {
         stockActualArticulo: increment(-diff),
       });

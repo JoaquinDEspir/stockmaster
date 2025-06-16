@@ -1,129 +1,177 @@
 import { useEffect, useState } from "react";
 import { collection, getDocs, addDoc } from "firebase/firestore";
 import db from "../../firebase";
+import CalcularModeloInventario from "./calcularModeloInventario";
+
 
 export default function AddModeloInventario() {
+  // Lista de artículos
   const [articulos, setArticulos] = useState([]);
-  const [modelo, setModelo] = useState("Lote Fijo");
-  const [articuloId, setArticuloId] = useState("");
+  const [tiposModelo, setTiposModelo] = useState([]);
+  const [articuloSeleccionado, setArticuloSeleccionado] = useState('');
+  const [tipoSeleccionado, setTipoSeleccionado] = useState('');
+  const [modelosInventario, setModelosInventario] = useState([]);
+  const [formData, setFormData] = useState({
+    desviacion: '',
+    periodoRevision: ''
+  });
 
+  // Cargar datos de articulos, tipos de modelos y modelos
   useEffect(() => {
-    const fetchArticulos = async () => {
-      const snap = await getDocs(collection(db, "Articulos"));
-      const modeloSnap = await getDocs(collection(db, "ModeloInventario"));
-
-      // Modelos activos (sin baja lógica)
-      const modelosActivos = modeloSnap.docs
-        .map(d => d.data())
-        .filter(m => !m.fechahorabaja);
-
-      // Artículos activos y sin modelo de inventario asignado
-      const articulosFiltrados = snap.docs
-        .map(d => ({
-          id: d.id,
-          nombre: d.data().nombreArticulo,
-          baja: d.data().fechahorabaja || null,
-        }))
-        .filter(art =>
-          !art.baja &&
-          !modelosActivos.some(m => m.codArticulo === art.id)
+    const fetchData = async () => {
+      const articulosSnapshot = await getDocs(collection(db, 'Articulo'));
+      const tiposSnapshot = await getDocs(collection(db, 'TipoModeloInventario'));
+      const modelosSnapshot = await getDocs(collection(db, 'ModeloInventario'));
+      setArticulos(articulosSnapshot.docs
+        .map(doc => ({ 
+          id: doc.id, 
+          baja: doc.data().fechaHoraBajaArticulo || null,
+          ...doc.data() }))
+        .filter(a => !a.baja)
         );
-
-      setArticulos(articulosFiltrados);
+      setTiposModelo(tiposSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setModelosInventario(modelosSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     };
-    fetchArticulos();
+    fetchData();
   }, []);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    if (!modelo || !articuloId) return alert("Completa los campos");
-
-    // Buscar proveedor predeterminado
+  // Función para obtener el costo del pedido del proveedor predeterminado
+  async function obtenerCostoPedidoProveedorPredeterminado(articuloId) {
     const proveedoresSnap = await getDocs(
-      collection(db, "Articulos", articuloId, "ProveedorArticulo")
+      collection(db, "Articulo", articuloId, "ArticuloProveedor")
     );
     const predeterminado = proveedoresSnap.docs.find(
       (doc) => doc.data().esProveedorPredeterminado === true
     );
-    if (!predeterminado) return alert("El artículo no tiene proveedor predeterminado");
+    if (!predeterminado) {
+      alert("El artículo no tiene proveedor predeterminado");
+      return null;
+    }
+    return predeterminado.data().costoPedidoArticulo;
+  }
 
-    const proveedor = predeterminado.data();
-    const L = parseInt(proveedor.DemoraEntrega);
-    const S = parseFloat(proveedor.CargosPedido);
-    const sigma = proveedor.desviacionEstandar ? parseFloat(proveedor.desviacionEstandar) : 1;
-    const T = proveedor.periodoRevision ? parseInt(proveedor.periodoRevision) : 7;
+  // Función para obtener el objeto ArticuloProveedor predeterminado
+  async function obtenerProveedorPredeterminado(articuloId) {
+    const proveedoresSnap = await getDocs(
+      collection(db, "Articulo", articuloId, "ArticuloProveedor")
+    );
 
-    // Obtener datos del artículo
-    const artSnap = await getDocs(collection(db, "Articulos"));
-    const articulo = artSnap.docs.find((d) => d.id === articuloId)?.data();
-    const D = parseInt(articulo.demandaArticulo);
+    const predeterminadoDoc = proveedoresSnap.docs.find(
+      (doc) => doc.data().esProveedorPredeterminado === true
+    );
 
-    // Calcular stock de seguridad automáticamente
-    const Z = 1.65; // Nivel de servicio 95%
-    const stockSeguridad = Math.ceil(Z * sigma * Math.sqrt(T + L));
-
-    let data = {
-      nombreModeloInventario: modelo,
-      stockDeSeguridad: parseInt(stockSeguridad),
-      codArticulo: articuloId,
-    };
-
-    if (modelo === "Lote Fijo") {
-      const loteOptimo = Math.round(Math.sqrt((2 * D * S) / articulo.costoAlmacenamientoArticulo));
-      const puntoPedido = Math.round((D / 30) * L + parseInt(stockSeguridad));
-
-      data = {
-        ...data,
-        loteOptimo,
-        puntoPedido,
-      };
-    } else if (modelo === "Periodo Fijo") {
-      const inventarioMaximo = Math.round((D / 30) * L + parseInt(stockSeguridad));
-      data = {
-        ...data,
-        inventarioMaximo,
-      };
+    if (!predeterminadoDoc) {
+      alert("El artículo no tiene proveedor predeterminado");
+      return null;
     }
 
-    await addDoc(collection(db, "ModeloInventario"), data);
-    alert("Modelo de inventario agregado");
-    setArticuloId("");
+    return { id: predeterminadoDoc.id, ...predeterminadoDoc.data() };
+}
+
+
+  // Funcion para guardar el modelo de inventario
+  const handleSave = async (e) => {
+    e.preventDefault();
+    if (!articuloSeleccionado || !tipoSeleccionado) {
+      alert('Debe seleccionar un artículo y un modelo');
+      return;
+    }
+
+    // Obtener costo pedido del proveedor predeterminado
+    const articuloProveedor = await obtenerProveedorPredeterminado(articuloSeleccionado.id);
+    console.log(`Este el el articuloProveedor predeterminado ${articuloProveedor}`);
+    if (!articuloProveedor) {
+      alert('El artículo no tiene proveedor predeterminado');
+      return;
+    }
+
+    // Verificar si el artículo ya tiene un modelo de inventario asociado
+    if( modelosInventario.some(modelo => modelo.articuloId === articuloSeleccionado.id )) {  
+      alert('El artículo ya tiene un modelo de inventario asociado');
+      // Limpiar formulario
+      setArticuloSeleccionado('');
+      setTipoSeleccionado('');
+      setFormData({ desviacion: '', periodoRevision: '' });
+      return;
+    }
+    
+    // Calcular el modelo de inventario
+    const modeloInventarioParaGuardar = CalcularModeloInventario(articuloSeleccionado, tipoSeleccionado, formData, articuloProveedor);
+    
+    await addDoc(collection(db, 'ModeloInventario'), modeloInventarioParaGuardar);
+    alert('Modelo de Inventario agregado correctamente');
+    setFormData({ desviacion: '', periodoRevision: '' });
+
+    // Limpiar formulario
+      setArticuloSeleccionado('');
+      setTipoSeleccionado('');
+      setFormData({ desviacion: '', periodoRevision: '' });
   };
 
   return (
-    <div className="container mt-4">
-      <h3>Agregar Modelo de Inventario</h3>
-      <form onSubmit={handleSubmit}>
-        <div className="mb-3">
-          <label className="form-label">Artículo</label>
-          <select
-            className="form-select"
-            value={articuloId}
-            onChange={(e) => setArticuloId(e.target.value)}
-          >
-            <option value="">Selecciona un artículo</option>
-            {articulos.map((art) => (
-              <option key={art.id} value={art.id}>
-                {art.nombre}
-              </option>
+    <form onSubmit={handleSave}>
+      <div className="p-4">
+        <h4 className="text-center mb-5">Agregar Modelo de Inventario</h4>
+        
+        <p>Seleccione un Articulo</p>
+        <div className="form-text mb-3">
+          <select className="form-select mb-5" value={articuloSeleccionado?.id || ''} onChange={e => {
+            const art = articulos.find(a => a.id === e.target.value);
+            setArticuloSeleccionado(art || '');
+          }}>
+            <option value="">Seleccione un artículo</option>
+            {articulos
+              .filter(a => !modelosInventario.some(m => m.articuloId === a.id))
+              .map(a => (
+                <option key={a.id} value={a.id}>{a.nombreArticulo}</option>
+              ))}
+          </select>
+        </div>
+
+        <p>Seleccione un Modelo</p>
+        <div className="form-text mb-3">
+          <select className="form-select mb-5" value={tipoSeleccionado?.id || ''} onChange={e => {
+            const tipo = tiposModelo.find(t => t.id === e.target.value);
+            setTipoSeleccionado(tipo || '');
+          }}>
+            <option value="">Seleccione un tipo</option>
+            {tiposModelo.map(t => (
+              <option key={t.id} value={t.id}>{t.nombre}</option>
             ))}
           </select>
         </div>
 
-        <div className="mb-3">
-          <label className="form-label">Modelo</label>
-          <input
-            type="text"
-            className="form-control"
-            value={modelo}
-            onChange={(e) => setModelo(e.target.value)}
-          />
-        </div>
+        {tipoSeleccionado && (
+          <>
+            <text>Desviación estándar</text>
+            <div className="form-text mb-3">
+              <input
+                type="number"
+                className="form-control mb-2"
+                value={formData.desviacion}
+                onChange={e => setFormData({ ...formData, desviacion: parseInt(e.target.value) })}
+              />
+            </div>
+            {tiposModelo.find(t => t.id === tipoSeleccionado.id)?.nombre === 'Modelo de Periodo Fijo' && (
+              <div className="mb-4">
+                <label>Periodo de revisión en días</label>
+                <input
+                  type="number"
+                  className="form-control mb-2"
+                  value={formData.periodoRevision}
+                  onChange={e => setFormData({ ...formData, periodoRevision: parseInt(e.target.value) })}
+                />
+              </div>
+            )}
+          </>
+        )}
 
-        <button type="submit" className="btn btn-primary">
-          Guardar Modelo
-        </button>
-      </form>
-    </div>
+        <div className="text-center mb-4 mt-5">
+          <button className="btn btn-success px-4 py-2" type="submit">
+            Guardar
+          </button>
+        </div>
+      </div>
+    </form>
   );
 }

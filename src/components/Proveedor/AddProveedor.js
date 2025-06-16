@@ -12,6 +12,7 @@ export default function AddProveedor() {
     e.preventDefault();
     if (!nombre) return alert("Nombre es requerido");
 
+    //se guarda el proveedor en la base de datos
     const docRef = await addDoc(collection(db, "Proveedor"), {
       nombreProveedor: nombre,
       nroTelefonoProveedor: telefono,
@@ -25,20 +26,29 @@ export default function AddProveedor() {
 
   return (
     <form onSubmit={handleSubmit} className="container my-4">
-      <h4>➕ Alta de Proveedor</h4>
-      <input
-        className="form-control mb-2"
-        placeholder="Nombre proveedor"
-        value={nombre}
-        onChange={(e) => setNombre(e.target.value)}
-      />
-      <input
-        className="form-control mb-3"
-        placeholder="Teléfono"
-        value={telefono}
-        onChange={(e) => setTelefono(e.target.value)}
-      />
-      <button className="btn btn-success">Guardar</button>
+      <h4 className="mb-5 text-center">➕ Alta de Proveedor</h4>
+      
+      <div>
+        <text className="form-text mb-3">Nombre</text>
+        <input
+          className="form-control mb-2"
+          value={nombre}
+          onChange={(e) => setNombre(e.target.value)}
+        />
+      </div>
+      
+      <div>
+        <text className="form-text mb-3">Numero de telefono</text>
+        <input
+          className="form-control mb-3"
+          value={telefono}
+          onChange={(e) => setTelefono(e.target.value)}
+        />
+      </div>
+
+      <div className="text-center mb-5">
+        <button className="btn btn-success px-4 py-2">Guardar</button>
+      </div>
     </form>
   );
 }

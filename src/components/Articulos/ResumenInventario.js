@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { collection, getDocs, doc, updateDoc } from "firebase/firestore";
+import { collection, getDocs } from "firebase/firestore";
 import db from "../../firebase";
 
 export default function ResumenInventario() {
@@ -8,148 +8,127 @@ export default function ResumenInventario() {
   const [proveedores, setProveedores] = useState({});
   const [nombresProveedores, setNombresProveedores] = useState({});
   const [loading, setLoading] = useState(true);
+  const [tipoModelos, setTipoModelos] = useState([]);
 
   useEffect(() => {
     const fetchDataAndCalculate = async () => {
-      const artSnap = await getDocs(collection(db, "Articulos"));
-      const modeloSnap = await getDocs(collection(db, "ModeloInventario"));
-      const provSnap = await getDocs(collection(db, "Proveedor"));
+      try {
+        // Obtener todo en paralelo
+        const [artSnap, modeloSnap, provSnap, tipoModeloSnap] = await Promise.all([
+          getDocs(collection(db, "Articulo")),
+          getDocs(collection(db, "ModeloInventario")),
+          getDocs(collection(db, "Proveedor")),
+          getDocs(collection(db, "TipoModeloInventario")),
+        ]);
 
-      // FILTRAR bajas lógicas
-      const articulosData = artSnap.docs
-        .map((d) => ({ id: d.id, ...d.data() }))
-        .filter((a) => !a.fechahorabaja);
+        // Filtrar tipo modelos activos
+        const tipoModelosData = tipoModeloSnap.docs
+          .map((d) => ({ id: d.id, ...d.data() }))
+          .filter((tm) => !tm.fechaHoraBajaTipoModeloInventario);
+        setTipoModelos(tipoModelosData);
 
-      const modelosData = modeloSnap.docs
-        .map((d) => ({ id: d.id, ...d.data() }))
-        .filter((m) => !m.fechahorabaja);
+        // Artículos activos
+        const articulosData = artSnap.docs
+          .map((d) => ({ id: d.id, ...d.data() }))
+          .filter((a) => !a.fechaHoraBajaArticulo); // filtrar artículos que no estan dados de baja
 
-      // FILTRAR proveedores dados de baja
-      const nombres = {};
-      provSnap.docs.forEach((d) => {
-        if (!d.data().fechaHoraBajaProveedor) {
-          nombres[d.id] = d.data().nombreProveedor || d.id;
+        // Modelos (sin filtrar)
+        const modelosData = modeloSnap.docs.map((d) => ({ id: d.id, ...d.data() }));
+        setModelos(modelosData);
+
+        // Nombres de proveedores activos
+        const nombres = {};
+        provSnap.docs.forEach((d) => {
+          const data = d.data();
+          if (!data.fechaHoraBajaProveedor) {
+            nombres[d.id] = data.nombreProveedor || d.id;
+          }
+        });
+        setNombresProveedores(nombres);
+
+        // Obtener proveedores por artículo en paralelo
+        const proveedoresData = await Promise.all(
+          artSnap.docs.map(async (a) => {
+            const sub = await getDocs(collection(db, "Articulo", a.id, "ArticuloProveedor"));
+            return {
+              id: a.id,
+              proveedores: sub.docs
+                .map((d) => ({ id: d.id, ...d.data() }))
+                .filter((p) => !p.fechaHoraBajaArticuloProveedor),
+            };
+          })
+        );
+
+        const provsMap = {};
+        proveedoresData.forEach(({ id, proveedores }) => {
+          provsMap[id] = proveedores;
+        });
+        setProveedores(provsMap);
+
+        // Logs de advertencia
+        for (const a of articulosData) {
+          const m = modelosData.find((m) => m.articuloId === a.id);
+          const listaProv = provsMap[a.id] || [];
+          const pred = listaProv.find(p => p.esProveedorPredeterminado);
+
+          if (!m) console.log(`❌ Sin modelo para ${a.nombreArticulo}`);
+          if (!pred) console.log(`❌ Sin proveedor predeterminado para ${a.nombreArticulo}`);
         }
-      });
 
-      // Cargar proveedores por artículo (filtrando los dados de baja lógica)
-      const provs = {};
-      for (const a of artSnap.docs) {
-        const sub = await getDocs(collection(db, "Articulos", a.id, "ProveedorArticulo"));
-        provs[a.id] = sub.docs
-          .map(d => ({ id: d.id, ...d.data() }))
-          .filter(p => !p.fechaHoraBajaProveedorArticulo);
+        setArticulos(articulosData);
+        setLoading(false);
+      } catch (error) {
+        console.error("Error al cargar datos de inventario:", error);
       }
-
-      // --- Calcular y actualizar modelos en lote, con LOGS ---
-      for (const a of articulosData) {
-        const m = modelosData.find((m) => m.codArticulo === a.id);
-        const listaProv = provs[a.id] || [];
-        const pred = listaProv.find(p => p.esProveedorPredeterminado);
-
-        if (!m) {
-          console.log(`No hay modelo inventario para el artículo ${a.nombreArticulo}`);
-          continue;
-        }
-        if (!pred) {
-          console.log(`No hay proveedor predeterminado para ${a.nombreArticulo}`);
-          continue;
-        }
-
-        // NUEVO: obtener sigma y T del proveedor predeterminado
-        const Z = 1.65;
-        const sigma = pred.desviacionEstandar ? parseFloat(pred.desviacionEstandar) : 1;
-        const T = pred.periodoRevision ? parseInt(pred.periodoRevision) : 7;
-        const demora = parseInt(pred.DemoraEntrega) || 0;
-        const stockDeSeguridad = Math.ceil(Z * sigma * Math.sqrt(T + demora));
-
-        // Actualizar si es distinto al que está en Firestore
-        let necesitaUpdate = false;
-        if (m.stockDeSeguridad !== stockDeSeguridad) {
-          console.log(
-            `Artículo: ${a.nombreArticulo} | StockSeguridad actual: ${m.stockDeSeguridad}, Calculado: ${stockDeSeguridad}`
-          );
-          m.stockDeSeguridad = stockDeSeguridad;
-          necesitaUpdate = true;
-        }
-
-        // LOTE FIJO
-        if (m.nombreModeloInventario === "Lote Fijo") {
-          const d = a.demandaArticulo;
-          const cp = a.costoPedidoArticulo;
-          const ca = a.costoAlmacenamientoArticulo;
-          const lote = Math.sqrt((2 * d * cp) / ca);
-          const punto = demora * (d / 30) + stockDeSeguridad;
-
-          const loteOptimo = Math.round(lote);
-          const puntoPedido = Math.round(punto);
-
-          if (m.loteOptimo !== loteOptimo || m.puntoPedido !== puntoPedido) {
-            console.log(`Artículo: ${a.nombreArticulo}`);
-            console.log(`   Lote óptimo actual: ${m.loteOptimo}, Calculado: ${loteOptimo}`);
-            console.log(`   Punto pedido actual: ${m.puntoPedido}, Calculado: ${puntoPedido}`);
-            necesitaUpdate = true;
-            m.loteOptimo = loteOptimo;
-            m.puntoPedido = puntoPedido;
-          }
-        }
-        // PERÍODO FIJO
-        else if (m.nombreModeloInventario === "Periodo Fijo") {
-          const max = Math.round((a.demandaArticulo / 30) * demora + stockDeSeguridad);
-          if (m.inventarioMaximo !== max) {
-            console.log(
-              `Inventario Máximo actual: ${m.inventarioMaximo}, Calculado: ${max}`
-            );
-            necesitaUpdate = true;
-            m.inventarioMaximo = max;
-          }
-        }
-
-        if (necesitaUpdate) {
-          try {
-            await updateDoc(doc(db, "ModeloInventario", m.id), {
-              stockDeSeguridad,
-              loteOptimo: m.loteOptimo ?? undefined,
-              puntoPedido: m.puntoPedido ?? undefined,
-              inventarioMaximo: m.inventarioMaximo ?? undefined,
-            });
-            console.log(
-              `   Actualizado Firestore! stockDeSeguridad: ${stockDeSeguridad}, loteOptimo: ${m.loteOptimo}, puntoPedido: ${m.puntoPedido}, inventarioMaximo: ${m.inventarioMaximo}`
-            );
-          } catch (e) {
-            console.error(`Error actualizando modelo para ${a.nombreArticulo}:`, e);
-          }
-        } else {
-          console.log("   No se requiere actualización, valores iguales.");
-        }
-      }
-
-      setArticulos(articulosData);
-      setModelos(modelosData);
-      setProveedores(provs);
-      setNombresProveedores(nombres);
-      setLoading(false);
     };
 
     fetchDataAndCalculate();
   }, []);
 
-  const getModeloDeArticulo = (id) => modelos.find((m) => m.codArticulo === id);
+  // Helpers
+  const getModeloDeArticulo = (id) => modelos.find((m) => m.articuloId === id);
+  const getTipoModelo = (id) => tipoModelos.find((tm) => tm.id === id);
+  const tieneOrdenPendiente = (articuloId) => false; // TODO: lógica real
+  const getProveedorPredeterminado = (articuloId) => {
+    const lista = proveedores[articuloId] || [];
+    return lista.find(p => p.esProveedorPredeterminado) || null;
+  };
 
-  const tieneOrdenPendiente = (articuloId) => false; // placeholder
+  // CALCULO DE CGI 
+  const calcularCGI = (articulo, modelo, tm ,proveedorArticulo) => {
+    if (!articulo) {
+      console.log ('No hay articulo');
+      return null;
+    } else if (!modelo) {
+      console.log ('No hay modelo');
+      return null;
+    } else if (!proveedorArticulo) {
+      console.log ('No hay proveedor articulo');
+      return null;
+    }
+    
+    const costoAlmacenamiento = parseFloat(articulo.costoAlmacenamientoArticulo);
+    const demanda = parseFloat(articulo.demandaArticulo);
+    const demandaAnual = demanda * 365;
+    const costoPedido = parseFloat(proveedorArticulo.costoPedidoArticulo);
+    const loteOptimo = parseFloat(modelo.cantidadAPedirOptima);
+    const costoPorUnidad = parseFloat(proveedorArticulo.precioUnitario);
 
-  const calcularCGI = (a, m) => {
-    if (!a || !m || m.nombreModeloInventario !== "Lote Fijo" || !m.loteOptimo) return null;
-    const { demandaArticulo, costoPedidoArticulo, costoAlmacenamientoArticulo } = a;
-    const lote = m.loteOptimo;
-    const cgi = (costoPedidoArticulo * demandaArticulo) / lote + (lote / 2) * costoAlmacenamientoArticulo;
+    if ([costoAlmacenamiento, demanda, costoPedido, loteOptimo, costoPorUnidad].some(isNaN)) {
+      return null;
+    }
+    if (!articulo || !modelo || !tm ||tm.nombre !== "Modelo de Lote Fijo" || !modelo.cantidadAPedirOptima || !proveedorArticulo) return null;
+
+    const cgi = ((demandaAnual / loteOptimo) * costoPedido) +
+                (demandaAnual * costoPorUnidad) +
+                ((loteOptimo / 2) * costoAlmacenamiento);
     return cgi.toFixed(2);
   };
 
   const getRowClass = (a, m) => {
     if (!m) return "";
     if (a.stockActualArticulo <= m.puntoPedido && !tieneOrdenPendiente(a.id)) return "table-danger";
-    if (a.stockActualArticulo <= m.stockDeSeguridad) return "table-warning";
+    if (a.stockActualArticulo <= m.stockSeguridad) return "table-warning";
     return "";
   };
 
@@ -168,9 +147,9 @@ export default function ResumenInventario() {
               <th>Modelo</th>
               <th>Lote óptimo</th>
               <th>Punto pedido</th>
-              <th>Inventario máx</th>
               <th>Stock Seguridad</th>
               <th>CGI</th>
+              <th>Per. Revisión (días)</th>
               <th>Proveedores</th>
               <th>Estado</th>
             </tr>
@@ -179,30 +158,36 @@ export default function ResumenInventario() {
             {articulos.map((a) => {
               const m = getModeloDeArticulo(a.id);
               if (!m) return null;
+
+              const tm = getTipoModelo(m.tipoModeloId);
+              const proveedorPred = getProveedorPredeterminado(a.id);
               const rowClass = getRowClass(a, m);
               const listaProv = proveedores[a.id] || [];
-              const estado = a.stockActualArticulo <= (m?.puntoPedido ?? 0) && !tieneOrdenPendiente(a.id)
-                ? "🔴 Reponer"
-                : a.stockActualArticulo <= (m?.stockDeSeguridad ?? 0)
-                ? "🟠 Faltante"
-                : "✅ OK";
+
+              let estado = "✅ OK";
+              if (a.stockActualArticulo <= (m.stockSeguridad ?? 0)) {
+                estado = "🟠 Faltante";
+              } else if (a.stockActualArticulo <= (m.puntoPedido ?? 0) && !tieneOrdenPendiente(a.id)) {
+                estado = "🔴 Reponer";
+              }
 
               return (
                 <tr key={a.id} className={rowClass}>
                   <td>{a.nombreArticulo}</td>
                   <td>{a.stockActualArticulo}</td>
                   <td>{a.demandaArticulo}</td>
-                  <td>{m?.nombreModeloInventario || "-"}</td>
-                  <td>{m?.loteOptimo ?? "-"}</td>
-                  <td>{m?.puntoPedido ?? "-"}</td>
-                  <td>{m?.inventarioMaximo ?? "-"}</td>
-                  <td>{m?.stockDeSeguridad ?? "-"}</td>
-                  <td>{calcularCGI(a, m) ?? "-"}</td>
+                  <td>{tm?.nombre ?? "-"}</td>
+                  <td>{m.cantidadAPedirOptima ?? "-"}</td>
+                  <td>{m.puntoPedido ?? "-"}</td>
+                  <td>{m.stockSeguridad ?? "-"}</td>
+                  <td>{calcularCGI(a, m, tm, proveedorPred) ?? "-"}</td>
+                  <td>{m.periodoRevision ?? "-"}</td>
                   <td>
                     {listaProv.length > 0
                       ? listaProv.map((p, i) => (
                           <div key={i}>
-                            {nombresProveedores[p.codProveedor] || p.codProveedor} ({p.PrecioUnitario}) {p.esProveedorPredeterminado ? "⭐" : ""}
+                            {nombresProveedores[p.codProveedor] || p.codProveedor} ({p.precioUnitario}){" "}
+                            {p.esProveedorPredeterminado ? "⭐" : ""}
                           </div>
                         ))
                       : "-"}

@@ -11,7 +11,7 @@ import {
 } from "firebase/firestore";
 import db from "../../firebase";
 
-export default function DeleteProveedorArticulo() {
+export default function DeleteArticuloProveedor() {
   const [articulos, setArticulos] = useState([]);
   const [proveedores, setProveedores] = useState([]);
   const [articuloId, setArticuloId] = useState("");
@@ -19,7 +19,7 @@ export default function DeleteProveedorArticulo() {
 
   useEffect(() => {
     const fetch = async () => {
-      const artSnap = await getDocs(collection(db, "Articulos"));
+      const artSnap = await getDocs(collection(db, "Articulo"));
       const provSnap = await getDocs(collection(db, "Proveedor"));
       setArticulos(artSnap.docs.map(d => ({ id: d.id, nombre: d.data().nombreArticulo })));
       setProveedores(provSnap.docs.map(d => ({ id: d.id, nombre: d.data().nombreProveedor })));
@@ -34,7 +34,7 @@ export default function DeleteProveedorArticulo() {
     const confirm = window.confirm("¿Dar de baja esta relación proveedor-artículo?");
     if (!confirm) return;
 
-    const docRef = doc(db, "Articulos", articuloId, "ProveedorArticulo", proveedorId);
+    const docRef = doc(db, "Articulo", articuloId, "ArticuloProveedor", proveedorId);
     const snap = await getDoc(docRef);
 
     if (!snap.exists()) {
@@ -42,8 +42,13 @@ export default function DeleteProveedorArticulo() {
     }
 
     const data = snap.data();
-    if (data.fechaHoraBajaProveedorArticulo) {
+    if (data.fechaHoraBajaArticuloProveedor) {
       return alert("Ya se encuentra dada de baja.");
+    }
+
+    //verificacion de que no sea proveedor predeterminado
+    if(data.esProveedorPredeterminado) {
+      return alert("No se puede dar de baja un proveedor predeterminado. Debe cambiarlo primero.");
     }
 
     // 🔍 Verificar si existe OC con ese proveedor y artículo en estado Pendiente o Enviada
@@ -71,7 +76,8 @@ export default function DeleteProveedorArticulo() {
     }
 
     await updateDoc(docRef, {
-      fechaHoraBajaProveedorArticulo: Timestamp.now(),
+      fechaHoraBajaArticuloProveedor: Timestamp.now(),
+      esProveedorPredeterminado: false, // Aseguramos que no quede como predeterminado
     });
 
     alert("Relación dada de baja correctamente");
@@ -80,8 +86,9 @@ export default function DeleteProveedorArticulo() {
 
   return (
     <div className="container my-4">
-      <h4>🗑️ Dar de baja Proveedor-Artículo</h4>
-
+      <h4 className="text-center mb-5">🗑️ Dar de baja Proveedor-Artículo</h4>
+      
+      <text className="form-text mb-3">Seleccione un Articulo</text>
       <select className="form-select mb-2" value={articuloId} onChange={(e) => setArticuloId(e.target.value)}>
         <option value="">Seleccionar artículo</option>
         {articulos.map((a) => (
@@ -89,6 +96,7 @@ export default function DeleteProveedorArticulo() {
         ))}
       </select>
 
+      <text className="form-text mb-3">Seleccione un Proveedor</text>
       <select className="form-select mb-3" value={proveedorId} onChange={(e) => setProveedorId(e.target.value)}>
         <option value="">Seleccionar proveedor</option>
         {proveedores.map((p) => (
@@ -96,13 +104,15 @@ export default function DeleteProveedorArticulo() {
         ))}
       </select>
 
-      <button
-        className="btn btn-danger"
-        onClick={handleDelete}
-        disabled={!articuloId || !proveedorId}
-      >
-        Dar de baja
-      </button>
+      <div className="text-center mb-4 mt-5">
+        <button
+          className="btn btn-danger px-4 py-2"
+          onClick={handleDelete}
+          disabled={!articuloId || !proveedorId}
+        >
+          Dar de baja
+        </button>
+      </div>
     </div>
   );
 }

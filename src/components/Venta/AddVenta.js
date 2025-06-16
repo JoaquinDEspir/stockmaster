@@ -17,7 +17,7 @@ export default function AddVenta() {
 
   useEffect(() => {
     const fetchData = async () => {
-      const snap = await getDocs(collection(db, "Articulos"));
+      const snap = await getDocs(collection(db, "Articulo"));
       // Solo artículos activos (sin fechahorabaja)
       const data = snap.docs
         .map((d) => ({
@@ -76,7 +76,7 @@ export default function AddVenta() {
               oc.id,
               "DetalleOrdenCompra",
               det.id,
-              "articulos"
+              "Articulo"
             )
           );
           if (arts.docs.some((a) => a.id === codArticulo)) return true;
@@ -100,10 +100,23 @@ export default function AddVenta() {
     if (modeloNombre === "Lote Fijo" && stock < modelo.puntoPedido) {
       const tieneOC = await verificarOrdenActiva(codArticulo);
       if (!tieneOC) {
+        // Buscar proveedor predeterminado activo
+        const provArtSnap = await getDocs(collection(db, "Articulo", codArticulo, "ArticuloProveedor"));
+        const provPred = provArtSnap.docs.find(
+          p => p.data().esProveedorPredeterminado && !p.data().fechaHoraBajaArticuloProveedor
+        );
+        if (!provPred) {
+          alert("No hay proveedor predeterminado activo para este artículo");
+          return;
+        }
+        const proveedor = provPred.data();
+        const codProveedor = proveedor.codProveedor;
+        const precioUnitario = proveedor.PrecioUnitario || 0;
+
         const fecha = new Date();
         const ordenRef = await addDoc(collection(db, "OrdenCompra"), {
           fechaHoraOrdenCompra: fecha,
-          codProveedor: "AUTOGENERADA",
+          codProveedor: codProveedor, // proveedor correcto
         });
 
         await setDoc(
@@ -120,7 +133,7 @@ export default function AddVenta() {
           {
             fechaHoraAlta: fecha,
             fechaHoraBaja: null,
-            precioTotal: 0,
+            precioTotal: precioUnitario * (modelo.loteOptimo || 1), // calcula el total del detalle
           }
         );
 
@@ -131,18 +144,18 @@ export default function AddVenta() {
             ordenRef.id,
             "DetalleOrdenCompra",
             detalleRef.id,
-            "articulos",
+            "Articulo",
             codArticulo
           ),
           {
             codArticulo,
-            precioArticulo: 0,
+            precioArticulo: precioUnitario,
             cantidad: modelo.loteOptimo || 1,
           }
         );
 
         // Mensaje de log en consola
-        console.log(`⚙️ OC autogenerada para ${codArticulo}`);
+        console.log(`⚙️ OC autogenerada para ${codArticulo} con proveedor ${codProveedor}, precio unitario ${precioUnitario}`);
       }
     }
   };
@@ -188,7 +201,7 @@ export default function AddVenta() {
       });
 
       // Actualizar stock
-      const artRef = doc(db, "Articulos", item.codArticulo);
+      const artRef = doc(db, "Articulo", item.codArticulo);
       const nuevoStock =
         articulos.find((a) => a.id === item.codArticulo).stock -
         parseInt(item.cantidadVendidaArticulo);

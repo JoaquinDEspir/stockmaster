@@ -30,7 +30,6 @@ import TablaOrdenesCompra from "./components/Ordencompra/TablaOrdenesCompra";
 // Modelo Inventario
 import AddModeloInventario from "./components/ModeloInventario/AddModeloInventario";
 import UpdateModeloInventario from "./components/ModeloInventario/UpdateModeloInventario";
-import DeleteModeloInventario from "./components/ModeloInventario/DeleteModeloInventario";
 
 // Venta
 import AddVenta from "./components/Venta/AddVenta";
@@ -75,7 +74,6 @@ function App() {
         {/* Modelo de Inventario */}
         <Route path="/add-modelo-inventario" element={<AddModeloInventario />} />
         <Route path="/update-modelo-inventario" element={<UpdateModeloInventario />} />
-        <Route path="/delete-modelo-inventario" element={<DeleteModeloInventario />} />
 
         {/* Ventas */}
         <Route path="/add-venta" element={<AddVenta />} />

@@ -53,8 +53,9 @@ export default function UpdateProveedor() {
 
   return (
     <div className="container my-4">
-      <h4>Actualizar Proveedor</h4>
+      <h4 className="text-center mb-5"> ✏️ Actualizar Proveedor</h4>
 
+      <text className="form-text mb-3">Seleccionar proveedor</text>
       <select
         className="form-select mb-3"
         value={selectedId}
@@ -68,21 +69,35 @@ export default function UpdateProveedor() {
 
       {proveedor && (
         <form onSubmit={handleUpdate}>
-          <input
-            className="form-control mb-2"
-            value={proveedor.nombreProveedor}
-            onChange={(e) =>
-              setProveedor({ ...proveedor, nombreProveedor: e.target.value })
-            }
-          />
-          <input
-            className="form-control mb-2"
-            value={proveedor.nroTelefonoProveedor}
-            onChange={(e) =>
-              setProveedor({ ...proveedor, nroTelefonoProveedor: e.target.value })
-            }
-          />
-          <button className="btn btn-warning">Actualizar</button>
+          <div className="mb-3 row">
+            <label className="col-sm-3 col-form-label">Nombre</label>
+            <div className="col-sm-9">
+              <input
+                className="form-control mb-2"
+                value={proveedor.nombreProveedor}
+                onChange={(e) =>
+                  setProveedor({ ...proveedor, nombreProveedor: e.target.value })
+                }
+              />
+            </div>
+          </div>
+
+          <div className="mb-3 row">
+            <label className="col-sm-3 col-form-label">Número de Teléfono</label>
+            <div className="col-sm-9">
+              <input
+                className="form-control mb-2"
+                value={proveedor.nroTelefonoProveedor}
+                onChange={(e) =>
+                  setProveedor({ ...proveedor, nroTelefonoProveedor: e.target.value })
+                }
+              />
+            </div>
+          </div>
+          
+          <div className="text-center mb-4 mt-5">
+            <button className="btn btn-warning px-4 py-2">Actualizar</button>
+          </div>
         </form>
       )}
       {/* Mensaje si el proveedor está dado de baja */}

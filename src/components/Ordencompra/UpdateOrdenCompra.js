@@ -30,7 +30,7 @@ export default function UpdateOrdenConDetalle() {
       const provSnap = await getDocs(collection(db, "Proveedor"));
       setProveedores(provSnap.docs.map(doc => ({ id: doc.id, nombre: doc.data().nombreProveedor })));
 
-      const artSnap = await getDocs(collection(db, "Articulos"));
+      const artSnap = await getDocs(collection(db, "Articulo"));
       setArticulos(artSnap.docs.map(d => ({ id: d.id, nombre: d.data().nombreArticulo })));
     };
     fetchInitialData();
@@ -47,7 +47,7 @@ export default function UpdateOrdenConDetalle() {
       const detalle = detalleSnap.docs[0];
       if (detalle) {
         setDetalleId(detalle.id);
-        const itemsSnap = await getDocs(collection(db, "OrdenCompra", selectedOrdenId, "DetalleOrdenCompra", detalle.id, "articulos"));
+        const itemsSnap = await getDocs(collection(db, "OrdenCompra", selectedOrdenId, "DetalleOrdenCompra", detalle.id, "Articulo"));
         setItems(itemsSnap.docs.map(d => ({ codArticulo: d.id, ...d.data() })));
       }
 
@@ -91,7 +91,7 @@ export default function UpdateOrdenConDetalle() {
 
     await updateDoc(doc(db, "OrdenCompra", selectedOrdenId, "DetalleOrdenCompra", detalleId), { precioTotal: total });
 
-    const ref = collection(db, "OrdenCompra", selectedOrdenId, "DetalleOrdenCompra", detalleId, "articulos");
+    const ref = collection(db, "OrdenCompra", selectedOrdenId, "DetalleOrdenCompra", detalleId, "Articulo");
     const existentes = await getDocs(ref);
     for (const d of existentes.docs) {
       await deleteDoc(doc(ref, d.id));

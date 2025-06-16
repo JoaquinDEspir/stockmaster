@@ -7,37 +7,49 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import db from "../../firebase";
+import CalcularModeloInventario from "./calcularModeloInventario";
 
 export default function UpdateModeloInventario() {
   const [modelos, setModelos] = useState([]);
   const [articulos, setArticulos] = useState([]);
+  const [tipoModelos, setTipoModelos] = useState([]);
   const [selectedId, setSelectedId] = useState("");
   const [data, setData] = useState(null);
+  const [articuloSeleccionado, setArticuloSeleccionado] = useState("");
+  const [tipoModelo, setTipoModelo] = useState(null);
+  const [modeloSeleccionado, setModeloSeleccionado] = useState("");
 
   useEffect(() => {
     const fetchAll = async () => {
       const snap = await getDocs(collection(db, "ModeloInventario"));
-      const art = await getDocs(collection(db, "Articulos"));
+      const art = await getDocs(collection(db, "Articulo"));
+      const tipos = await getDocs(collection(db, "TipoModeloInventario"));
 
       // Artículos activos
       const articulosActivos = art.docs
         .map(d => ({
           id: d.id,
           nombre: d.data().nombreArticulo,
-          baja: d.data().fechahorabaja || null,
+          demandaArticulo: d.data().demandaArticulo,
+          stockActualArticulo: d.data().stockActualArticulo,
+          costoAlmacenamientoArticulo: d.data().costoAlmacenamientoArticulo,
+          baja: d.data().fechaHoraBajaArticulo || null,
         }))
         .filter(a => !a.baja);
 
       // Modelos activos Y cuyo artículo siga activo
       const modelosFiltrados = snap.docs
         .map(d => ({ id: d.id, ...d.data() }))
-        .filter(m =>
-          !m.fechahorabaja &&
-          articulosActivos.some(a => a.id === m.codArticulo)
+        .filter(a =>
+          !a.fechaHoraBajaArticulo &&
+          articulosActivos.some(a2 => a2.id === a.articuloId)
         );
+
+      const tiposModelosArr = tipos.docs.map(d => ({ id: d.id, ...d.data() }));
 
       setArticulos(articulosActivos);
       setModelos(modelosFiltrados);
+      setTipoModelos(tiposModelosArr);
     };
     fetchAll();
   }, []);
@@ -45,120 +57,168 @@ export default function UpdateModeloInventario() {
   useEffect(() => {
     if (!selectedId) {
       setData(null);
+      setTipoModelo(null);
       return;
     }
     const load = async () => {
       const ref = doc(db, "ModeloInventario", selectedId);
       const snap = await getDoc(ref);
-      if (!snap.exists() || snap.data().fechahorabaja) {
+      if (!snap.exists() || snap.data().fechaHoraBajaArticulo) {
         setData(null);
+        setTipoModelo(null);
         return;
       }
       const modelo = snap.data();
-
-      // Verificar que el artículo asociado también esté activo
-      const artSnap = await getDoc(doc(db, "Articulos", modelo.codArticulo));
-      const artData = artSnap.data();
-      if (!artData || artData.fechahorabaja) {
-        setData(null);
-        return;
-      }
-
-      const provSnap = await getDocs(collection(db, "Articulos", modelo.codArticulo, "ProveedorArticulo"));
-      const pred = provSnap.docs.find(d => d.data().esProveedorPredeterminado);
-      const proveedor = pred?.data();
-
-      // Calcular stock de seguridad automático con variables personalizadas
-      if (proveedor) {
-        const Z = 1.65;
-        const sigma = proveedor.desviacionEstandar ? parseFloat(proveedor.desviacionEstandar) : 1;
-        const T = proveedor.periodoRevision ? parseInt(proveedor.periodoRevision) : 7;
-        const demora = parseInt(proveedor.DemoraEntrega);
-
-        const stockDeSeguridad = Math.ceil(Z * sigma * Math.sqrt(T + demora));
-        modelo.stockDeSeguridad = stockDeSeguridad;
-
-        // Recalcular según el modelo seleccionado
-        const d = artData.demandaArticulo;
-        const cp = artData.costoPedidoArticulo;
-        const ca = artData.costoAlmacenamientoArticulo;
-
-        if (modelo.nombreModeloInventario === "Lote Fijo") {
-          const lote = Math.sqrt((2 * d * cp) / ca);
-          const puntoPedido = demora * (d / 30) + stockDeSeguridad;
-          modelo.loteOptimo = Math.round(lote);
-          modelo.puntoPedido = Math.round(puntoPedido);
-          modelo.inventarioMaximo = undefined;
-        } else if (modelo.nombreModeloInventario === "Periodo Fijo") {
-          const inventarioMaximo = (d / 30) * demora + stockDeSeguridad;
-          modelo.inventarioMaximo = Math.round(inventarioMaximo);
-          modelo.loteOptimo = undefined;
-          modelo.puntoPedido = undefined;
-        }
-      }
-
       setData(modelo);
+      // Buscar tipo de modelo (probar varios campos)
+      let tipo = tipoModelos.find(tm => tm.id === modelo.tipoModeloId);
+      if (!tipo) {
+        // Probar si el campo es tipoModeloID, tipo_modelo_id, etc.
+        tipo = tipoModelos.find(tm => tm.id === modelo.tipoModeloID || tm.id === modelo.tipo_modelo_id);
+      }
+      setTipoModelo(tipo);
     };
     load();
-  }, [selectedId]);
+  }, [selectedId, tipoModelos]);
 
-  const handleUpdate = async () => {
+  const handleUpdate = async (e) => {
+    e.preventDefault();
+    if (!data || !selectedId) return;
+    // Validar datos numéricos
+    if (!data.desviacionEstandar || Number(data.desviacionEstandar) <= 0 || (tipoModelo && (tipoModelo.nombre === "Modelo de Periodo Fijo" || tipoModelo.nombreModeloInventario === "Modelo de Periodo Fijo") && (!data.periodoRevision || Number(data.periodoRevision) <= 0))) {
+      alert("Complete correctamente los campos numéricos");
+      return;
+    }
+
+    // Usar siempre el objeto completo del artículo seleccionado
+    let articulo = articuloSeleccionado;
+    if (!articulo || !articulo.demandaArticulo) {
+      articulo = articulos.find(a => a.id === (articuloSeleccionado.id || articuloSeleccionado));
+    }
+    if (!articulo || !articulo.demandaArticulo) {
+      alert('No se pudo obtener el objeto completo del artículo.');
+      return;
+    }
+    const tipo = tipoModelo;
+    // Buscar proveedor predeterminado
+    let proveedor = null;
+    try {
+      const provSnap = await getDocs(collection(db, "Articulo", articulo.id, "ArticuloProveedor"));
+      const pred = provSnap.docs.find(d => d.data().esProveedorPredeterminado);
+      proveedor = pred ? pred.data() : null;
+    } catch (e) {
+      proveedor = null;
+    }
+
+    // Calcular modelo actualizado
+    let modeloInventarioActualizado = CalcularModeloInventario(
+      articulo,
+      tipo,
+      null,
+      proveedor,
+      modeloSeleccionado,
+      data
+    );
+    // Si es de Lote Fijo, asegurar periodoRevision = 0
+    if (
+      tipo &&
+      (tipo.nombre === "Modelo de Lote Fijo")
+    ) {
+      modeloInventarioActualizado.periodoRevision = 0;
+    }
+    
+    if (tipo &&
+      (tipo.nombre === "Modelo de Periodo Fijo")){
+          modeloInventarioActualizado.puntoPedido = 0;
+    }
+
     await updateDoc(doc(db, "ModeloInventario", selectedId), {
-      ...data,
-      stockDeSeguridad: parseInt(data.stockDeSeguridad),
-      loteOptimo: data.loteOptimo ? parseInt(data.loteOptimo) : undefined,
-      puntoPedido: data.puntoPedido ? parseInt(data.puntoPedido) : undefined,
-      inventarioMaximo: data.inventarioMaximo ? parseInt(data.inventarioMaximo) : undefined,
+      ...modeloInventarioActualizado
     });
     alert("Modelo actualizado correctamente");
   };
 
+  // Getters
+  const getModeloDeArticulo = (id) =>
+    modelos.find((m) => m.codArticulo === id || m.articuloId === id);
+
   return (
-    <div className="container my-4">
-      <h4>✏️ Editar Modelo de Inventario</h4>
+    <form onSubmit={handleUpdate}>
+      <div className="container my-4">
+        <h4 className="text-center mb-5">✏️ Editar Modelo de Inventario</h4>
 
-      <select className="form-select mb-3" value={selectedId} onChange={(e) => setSelectedId(e.target.value)}>
-        <option value="">Seleccionar modelo</option>
-        {modelos.map((m) => (
-          <option key={m.id} value={m.id}>
-            {m.nombreModeloInventario} - Artículo: {articulos.find(a => a.id === m.codArticulo)?.nombre || m.codArticulo}
-          </option>
-        ))}
-      </select>
+        <label>Seleccionar Artículo</label>
+        <select
+          className="form-select mb-5"
+          value={articuloSeleccionado?.id || ''}
+          onChange={e => {
+            const art = articulos.find(a => a.id === e.target.value);
+            setArticuloSeleccionado(art);
+            // Buscar el modelo asociado a este artículo
+            const modelo = getModeloDeArticulo(e.target.value);
+            setSelectedId(modelo ? modelo.id : '');
+            setModeloSeleccionado(modelo || '');
+          }}
+        >
+          <option value="">Seleccione un artículo</option>
+          {articulos.map(a => (
+            <option key={a.id} value={a.id}>{a.nombre}</option>
+          ))}
+        </select>
 
-      {data && (
-        <>
-          <input
-            className="form-control mb-2"
-            type="number"
-            placeholder="Stock de seguridad"
-            value={data.stockDeSeguridad || ""}
-            readOnly
-          />
+        {/* Renderizar inputs solo si data y tipoModelo están definidos y el tipo tiene nombre válido */}
+        {data && tipoModelo ? (
+          <>
+            {(tipoModelo.nombre === "Modelo de Lote Fijo") && (
+              <div className="mb-3">
+                <label>Desviación estándar</label>
+                <input
+                  className="form-control"
+                  type="number"
+                  min="0"
+                  step="any"
+                  value={data.desviacionEstandar || ''}
+                  onChange={e => setData({ ...data, desviacionEstandar: e.target.value })}
+                  placeholder="Ingrese la desviación estándar"
+                />
+              </div>
+            )}
 
-          {data.nombreModeloInventario === "Lote Fijo" && (
-            <>
-              <input className="form-control mb-2" type="number" placeholder="Lote óptimo"
-                value={data.loteOptimo || ""}
-                readOnly
-              />
-              <input className="form-control mb-3" type="number" placeholder="Punto de pedido"
-                value={data.puntoPedido || ""}
-                readOnly
-              />
-            </>
-          )}
+            {(tipoModelo.nombre === "Modelo de Periodo Fijo") && (
+              <>
+                <div className="mb-3">
+                  <label>Desviación estándar</label>
+                  <input
+                    className="form-control"
+                    type="number"
+                    min="0"
+                    step="any"
+                    value={data.desviacionEstandar || ''}
+                    onChange={e => setData({ ...data, desviacionEstandar: e.target.value })}
+                    placeholder="Ingrese la desviación estándar"
+                  />
+                </div>
+                <div className="mb-3">
+                  <label>Periodo de revisión (días)</label>
+                  <input
+                    className="form-control"
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={data.periodoRevision || ''}
+                    onChange={e => setData({ ...data, periodoRevision: e.target.value })}
+                    placeholder="Ingrese el periodo de revisión"
+                  />
+                </div>
+              </>
+            )}
 
-          {data.nombreModeloInventario === "Periodo Fijo" && (
-            <input className="form-control mb-3" type="number" placeholder="Inventario máximo"
-              value={data.inventarioMaximo || ""}
-              readOnly
-            />
-          )}
-
-          <button className="btn btn-warning" onClick={handleUpdate}>Actualizar</button>
-        </>
-      )}
-    </div>
+            <button className="btn btn-warning">Actualizar</button>
+          </>
+        ) : (
+          selectedId && <div className="alert alert-warning">No se encontró modelo o tipo de modelo para este artículo. Revisa la consola para más detalles.</div>
+        )}
+      </div>
+    </form>
   );
 }
