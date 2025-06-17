@@ -22,7 +22,6 @@ import DeleteProductoProveedor from "./components/ProveedorArticulo/DeleteProvee
 // Orden de compra
 import AddOrdenCompra from "./components/Ordencompra/AddOrdenCompra";
 import UpdateOrdenCompra from "./components/Ordencompra/UpdateOrdenCompra";
-import DeleteOrdenCompra from "./components/Ordencompra/DeleteOrdenCompra";
 import UpdateEstadoOrdenCompra from "./components/Ordencompra/UpdateEstadoOrdenCompra";
 import TablaOrdenesCompra from "./components/Ordencompra/TablaOrdenesCompra";
 
@@ -66,7 +65,6 @@ function App() {
         {/* Orden de compra */}
         <Route path="/add-orden-compra" element={<AddOrdenCompra />} />
         <Route path="/update-orden-compra" element={<UpdateOrdenCompra />} />
-        <Route path="/delete-orden-compra" element={<DeleteOrdenCompra />} />
         <Route path="/update-estado-orden-compra" element={<UpdateEstadoOrdenCompra />} />
         <Route path="/tabla-orden-compra" element={<TablaOrdenesCompra />} />
 

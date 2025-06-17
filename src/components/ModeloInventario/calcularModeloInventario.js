@@ -24,26 +24,9 @@ export default function CalcularModeloInventario(
         const periodoRevisionData = parseInt(data.periodoRevision || 7);
 
         if(tipoSeleccionado.nombre === "Modelo de Lote Fijo") {
-            // Debug: mostrar valores antes del cálculo
-            if (typeof window !== 'undefined') { // Solo si estoy en modo debug
-                window.alert(
-                    'DEBUG Lote Fijo (actualización):\n' +
-                    'demandaArticulo: ' + articuloSeleccionado.demandaArticulo + '\n' +
-                    'costoPedidoArticulo: ' + articuloProveedor.costoPedidoArticulo + '\n' +
-                    'costoAlmacenamientoArticulo: ' + articuloSeleccionado.costoAlmacenamientoArticulo
-                );
-            }
             return calcularModeloInventarioLoteFijo(articuloProveedor, articuloSeleccionado, tipoSeleccionado, desviacionData);
 
         } else if(tipoSeleccionado.nombre === "Modelo de Periodo Fijo") {
-            // Debug: mostrar valores antes del cálculo
-            console.log('DEBUG CalcularModeloInventario:', {
-                demandaArticulo: articuloSeleccionado.demandaArticulo,
-                periodoRevision: data.periodoRevision,
-                demoraEntrega: articuloProveedor.demoraEntrega,
-                desviacionEstandar: data.desviacionEstandar,
-                stockActualArticulo: articuloSeleccionado.stockActualArticulo
-            });
             return calcularModeloInventarioPeriodoFijo(articuloProveedor, articuloSeleccionado, tipoSeleccionado, desviacionData, periodoRevisionData);
         }
     }

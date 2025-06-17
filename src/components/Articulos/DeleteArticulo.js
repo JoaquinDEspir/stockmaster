@@ -37,35 +37,23 @@ export default function DeleteArticulo() {
 
     // Verificar si el artículo está en una orden de compra
     // Solo se pueden dar de baja si la orden no esta en estado "Pendiente" o "Enviada"
+    // Verificar si el artículo está en una orden de compra pendiente o enviada
     const ordenes = await getDocs(collection(db, "OrdenCompra"));
 
     for (const orden of ordenes.docs) {
+      // Verifica si la orden es para este artículo
+      if (orden.data().codArticulo !== selectedId) continue;
+
       // Obtener estados de la orden
       const estadosSnap = await getDocs(collection(db, "OrdenCompra", orden.id, "EstadoOrdenCompra"));
-      
-      let tieneEstadoBloqueado = false;
 
-      // Verificar si la orden tiene un estado que bloquee la baja
-      estadosSnap.forEach(docEstado => {
-        const estado = docEstado.data().nombreEstadoCompra;
-        if (estado === "Pendiente" || estado === "Enviada") {
-          tieneEstadoBloqueado = true;
-        }
-      });
-
-      // Si tiene estado bloqueado, verificamos si contiene el artículo
-      if (tieneEstadoBloqueado) {
-        const detalles = await getDocs(collection(db, "OrdenCompra", orden.id, "DetalleOrdenCompra"));
-        
-        for (const detalle of detalles.docs) {
-          const articulos = await getDocs(collection(db, "OrdenCompra", orden.id, "DetalleOrdenCompra", detalle.id, "Articulo"));
-
-          for (const articulo of articulos.docs) {
-            if (articulo.id === selectedId) {
-              alert("No se puede dar de baja un artículo que pertenece a una orden de compra Pendiente o Enviada");
-              return;
-            }
-          }
+      for (const docEstado of estadosSnap.docs) {
+        const estadoData = docEstado.data();
+        const estado = estadoData.nombreEstadoCompra;
+        const baja = estadoData.fechaHoraBajaEstadoCompra;
+        if ((estado === "Pendiente" || estado === "Enviada") && !baja) {
+          alert("No se puede dar de baja un artículo que pertenece a una orden de compra Pendiente o Enviada");
+          return; // 
         }
       }
     }

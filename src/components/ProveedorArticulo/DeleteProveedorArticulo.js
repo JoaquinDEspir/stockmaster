@@ -54,26 +54,25 @@ export default function DeleteArticuloProveedor() {
     // 🔍 Verificar si existe OC con ese proveedor y artículo en estado Pendiente o Enviada
     // Buscamos todas las OC del proveedor
     const ocSnap = await getDocs(
-      query(collection(db, "OrdenCompra"), where("codProveedor", "==", proveedorId))
+      query(collection(db, "OrdenCompra"), where("codProveedor", "==", proveedorId), where("codArticulo", "==", articuloId))
     );
 
     for (const orden of ocSnap.docs) {
-      // Para cada OC, buscar los detalles y estados
-      const detallesSnap = await getDocs(collection(db, "OrdenCompra", orden.id, "DetalleOrdenCompra"));
-      const detalles = detallesSnap.docs.map(d => d.data());
-      // ¿Contiene el artículo?
-      const incluyeArticulo = detalles.some(d => d.codArticulo === articuloId);
-      if (!incluyeArticulo) continue;
+      const estadosSnap = await getDocs(
+        collection(db, "OrdenCompra", orden.id, "EstadoOrdenCompra")
+      );
 
-      // Buscamos el estado actual de la OC
-      const estadosSnap = await getDocs(collection(db, "OrdenCompra", orden.id, "EstadoOrdenCompra"));
-      const estadoActual = estadosSnap.docs.find(d => !d.data().fechaHoraBajaEstadoCompra);
+      const estadoActual = estadosSnap.docs.find(
+        d => !d.data().fechaHoraBajaEstadoCompra
+      );
       const estado = estadoActual?.data().estadoOrdenCompra;
 
-      if (estado === "pendiente" || estado === "enviada") {
+      if (estado === "Pendiente" || estado === "Enviada") {
         return alert("❌ No se puede dar de baja la relación: existe una Orden de Compra pendiente o enviada para este artículo y proveedor.");
       }
     }
+
+    
 
     await updateDoc(docRef, {
       fechaHoraBajaArticuloProveedor: Timestamp.now(),

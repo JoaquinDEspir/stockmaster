@@ -66,16 +66,27 @@ export default function DeleteProveedor() {
       const estadosSnap = await getDocs(
         collection(db, "OrdenCompra", orden.id, "EstadoOrdenCompra")
       );
-      const tieneEstadoPendienteOEnviada = estadosSnap.docs.some(
-        d =>
-          !d.data().fechaHoraBajaEstadoCompra && // Estado actual
-          (d.data().estadoOrdenCompra === "pendiente" || d.data().estadoOrdenCompra === "enviada")
-      );
-      if (tieneEstadoPendienteOEnviada) {
+
+      const estadosVigentes = estadosSnap.docs
+        .map(d => d.data())
+        .filter(d => !d.fechaHoraBajaEstadoCompra);
+
+      if (estadosVigentes.length === 0) {
+        // No hay estado vigente, pasar a la siguiente OC
+        continue;
+      }
+
+      // Tomamos el último por fecha de alta (por si hay más de uno vigente por error)
+      estadosVigentes.sort((a, b) => a.fechaHoraAltaEstadoCompra.seconds - b.fechaHoraAltaEstadoCompra.seconds);
+      const estadoActual = estadosVigentes[estadosVigentes.length - 1];
+
+      if (estadoActual.nombreEstadoCompra === "Pendiente" || estadoActual.nombreEstadoCompra === "Enviada") {
         alert("❌ No se puede dar de baja: tiene una orden de compra pendiente o enviada.");
         return false;
       }
     }
+
+
 
     return true;
   };

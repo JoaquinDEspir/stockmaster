@@ -19,8 +19,10 @@ export default function UpdateOrdenConDetalle() {
   const [selectedOrdenId, setSelectedOrdenId] = useState("");
   const [proveedorId, setProveedorId] = useState("");
   const [items, setItems] = useState([]);
-  const [detalleId, setDetalleId] = useState("");
   const [estadoActual, setEstadoActual] = useState("");
+  const [proveedorPredeterminado, setProveedorPredeterminado] = useState("");
+  const [articuloOrdenCompra, setArticuloOrdenCompra] = useState("");
+  const [ordenCompraSeleccionada, SetOrdenCompraSeleccionada] = useState("");
 
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -41,16 +43,27 @@ export default function UpdateOrdenConDetalle() {
       if (!selectedOrdenId) return;
 
       const ordenDoc = await getDoc(doc(db, "OrdenCompra", selectedOrdenId));
-      if (ordenDoc.exists()) setProveedorId(ordenDoc.data().codProveedor);
+  
+      if (ordenDoc.exists()) {
+    const data = ordenDoc.data();
+    setProveedorId(data.codProveedor);
+    SetOrdenCompraSeleccionada(data);
 
-      const detalleSnap = await getDocs(collection(db, "OrdenCompra", selectedOrdenId, "DetalleOrdenCompra"));
-      const detalle = detalleSnap.docs[0];
-      if (detalle) {
-        setDetalleId(detalle.id);
-        const itemsSnap = await getDocs(collection(db, "OrdenCompra", selectedOrdenId, "DetalleOrdenCompra", detalle.id, "Articulo"));
-        setItems(itemsSnap.docs.map(d => ({ codArticulo: d.id, ...d.data() })));
+    const codArticulo = data.codArticulo;
+
+    if (codArticulo) {
+      const articuloDoc = await getDoc(doc(db, "Articulo", codArticulo));
+      if (articuloDoc.exists()) {
+        setArticuloOrdenCompra({ id: articuloDoc.id, ...articuloDoc.data() });
+      } else {
+        setArticuloOrdenCompra(null);
       }
+    } else {
+      setArticuloOrdenCompra(null);
+    }
+  }
 
+      
       // Estado actual
       const estadoSnap = await getDocs(query(
         collection(db, "OrdenCompra", selectedOrdenId, "EstadoOrdenCompra"),
@@ -63,21 +76,21 @@ export default function UpdateOrdenConDetalle() {
       }
     };
     fetchOrdenData();
-  }, [selectedOrdenId]);
+  }, [selectedOrdenId, proveedores]);
 
-  const handleItemChange = (i, campo, valor) => {
-    const nuevo = [...items];
-    nuevo[i][campo] = valor;
-    setItems(nuevo);
-  };
+  //busco el proveedor
+  useEffect(() => {
+  if (proveedorId && proveedores.length > 0) {
+    const proveedor = proveedores.find(p => p.id === proveedorId);
+    setProveedorPredeterminado(proveedor);
+  }
 
-  const handleEliminarItem = (index) => {
-    const nuevo = [...items];
-    nuevo.splice(index, 1);
-    setItems(nuevo);
-  };
+  }, [proveedorId, proveedores]);
 
-  const handleGuardar = async () => {
+
+  const handleUpdate = async (e) => {
+    e.preventDefault();
+
     if (!selectedOrdenId || !proveedorId) return alert("Faltan datos.");
 
     // No permitir modificar si el estado es Enviada o Finalizada
@@ -85,98 +98,88 @@ export default function UpdateOrdenConDetalle() {
       return alert(`La orden está en estado "${estadoActual}" y no puede modificarse.`);
     }
 
-    const total = items.reduce((acc, item) => acc + parseFloat(item.precioArticulo || 0) * parseInt(item.cantidad || 0), 0);
+    // --- VERIFICACIÓN DE PUNTO DE PEDIDO Y MODELO ---
+    // Traer el modelo de inventario del artículo
+    const modelosSnap = await getDocs(collection(db, "ModeloInventario"));
+    const modelo = modelosSnap.docs
+      .map(d => ({ id: d.id, ...d.data() }))
+      .find(m => m.articuloId === articuloOrdenCompra.id);
 
-    await updateDoc(doc(db, "OrdenCompra", selectedOrdenId), { codProveedor: proveedorId });
-
-    await updateDoc(doc(db, "OrdenCompra", selectedOrdenId, "DetalleOrdenCompra", detalleId), { precioTotal: total });
-
-    const ref = collection(db, "OrdenCompra", selectedOrdenId, "DetalleOrdenCompra", detalleId, "Articulo");
-    const existentes = await getDocs(ref);
-    for (const d of existentes.docs) {
-      await deleteDoc(doc(ref, d.id));
+    if (
+      modelo &&
+      modelo.tipoModeloId === "modelo1" &&
+      Number(ordenCompraSeleccionada.cantidadComprada) + (articuloOrdenCompra.stockActualArticulo || 0) <= (modelo.puntoPedido || 0)
+    ) {
+      return alert(
+        `La cantidad comprada debe ser mayor a la cantidad del Punto de Pedido (${modelo.puntoPedido}).`
+      );
     }
+    // --- FIN VERIFICACIÓN ---
 
-    for (const item of items) {
-      await setDoc(doc(ref, item.codArticulo), {
-        codArticulo: item.codArticulo,
-        precioArticulo: parseFloat(item.precioArticulo),
-        cantidad: parseInt(item.cantidad),
-      });
-    }
+    const ref = doc(db, "OrdenCompra", selectedOrdenId);
+    const ref1 = doc(db, "Articulo", articuloOrdenCompra.id, "ArticuloProveedor", proveedorId);
+    const docSnap = await getDoc(ref1);
+    const total = ordenCompraSeleccionada.cantidadComprada * docSnap.data().precioUnitario;
+
+    await updateDoc(ref, {
+      ...ordenCompraSeleccionada,
+      cantidadComprada: ordenCompraSeleccionada.cantidadComprada,
+      totalOrdenCompra: total,
+    });
 
     alert("Orden actualizada correctamente");
   };
+  
 
   return (
-    <div className="container my-4">
-      <h4>✏️ Editar Orden de Compra con Artículos</h4>
+    <form onSubmit={handleUpdate}>
+      <div className="container my-4">
+        <h4 className="text-center mb-5">✏️ Editar Orden de Compra con Artículos</h4>
 
-      <select className="form-select mb-3" value={selectedOrdenId} onChange={(e) => setSelectedOrdenId(e.target.value)}>
-        <option value="">Seleccionar orden</option>
-        {ordenes.map((o) => (
-          <option key={o.id} value={o.id}>Orden #{o.id}</option>
-        ))}
-      </select>
-
-      {selectedOrdenId && (
-        <>
-          <div className="mb-2">
-            <strong>Estado actual:</strong> {estadoActual}
-          </div>
-
-          <select className="form-select mb-3" value={proveedorId} onChange={(e) => setProveedorId(e.target.value)}>
-            <option value="">Seleccionar proveedor</option>
-            {proveedores.map((p) => (
-              <option key={p.id} value={p.id}>{p.nombre}</option>
-            ))}
-          </select>
-
-          {items.map((item, i) => (
-            <div key={i} className="card mb-3 p-3">
-              <div className="row g-2 align-items-end">
-                <div className="col-md-4">
-                  <select
-                    className="form-select"
-                    value={item.codArticulo}
-                    onChange={(e) => handleItemChange(i, "codArticulo", e.target.value)}
-                  >
-                    <option value="">Seleccionar artículo</option>
-                    {articulos.map((a) => (
-                      <option key={a.id} value={a.id}>{a.nombre}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="col-md-3">
-                  <input
-                    type="number"
-                    className="form-control"
-                    placeholder="Precio"
-                    value={item.precioArticulo}
-                    onChange={(e) => handleItemChange(i, "precioArticulo", e.target.value)}
-                  />
-                </div>
-                <div className="col-md-3">
-                  <input
-                    type="number"
-                    className="form-control"
-                    placeholder="Cantidad"
-                    value={item.cantidad}
-                    onChange={(e) => handleItemChange(i, "cantidad", e.target.value)}
-                  />
-                </div>
-                <div className="col-md-2">
-                  <button className="btn btn-outline-danger w-100" type="button" onClick={() => handleEliminarItem(i)}>
-                    ➖
-                  </button>
-                </div>
-              </div>
-            </div>
+        <select className="form-select mb-3" value={selectedOrdenId} onChange={(e) => setSelectedOrdenId(e.target.value)}>
+          <option value="">Seleccionar orden</option>
+          {ordenes.map((o) => (
+            <option key={o.id} value={o.id}>Orden Número {o.numeroDeOrdenCompra}</option>
           ))}
+        </select>
 
-          <button className="btn btn-warning" onClick={handleGuardar}>Guardar Cambios</button>
-        </>
-      )}
-    </div>
+        {selectedOrdenId && (
+          <>
+            <div className="mb-2">
+              <strong>Estado actual:</strong> {estadoActual}
+            </div>
+
+            <div className="mb-2">
+              <strong>Proveedor: </strong> {proveedorPredeterminado ? proveedorPredeterminado.nombre : "-"}
+            </div>
+
+            <div className="mb-2">
+              <strong>Articulo: </strong> {articuloOrdenCompra ? articuloOrdenCompra.nombreArticulo : "-"}
+            </div>
+
+            <div className="mb-3 row">
+                    <label className="col-sm-3 col-form-label">Cantidad Comprada</label>
+                    <div className="col-sm-9">
+                      <input
+                        type="number"
+                        className="form-control"
+                        value={ordenCompraSeleccionada.cantidadComprada}
+                        onChange={(e) => {
+                            SetOrdenCompraSeleccionada({
+                            ...ordenCompraSeleccionada,
+                            cantidadComprada: e.target.value,
+                            })
+                        }}
+                      />
+                    </div>
+              </div>
+
+            <div className="text-center mb-4 mt-5">
+              <button className="btn btn-warning px-4 py-2">Guardar Cambios</button>
+            </div>
+          </>
+        )}
+      </div>
+    </form>
   );
 }

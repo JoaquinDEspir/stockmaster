@@ -37,7 +37,7 @@ export default function AddVenta() {
   const handleAgregarItem = () => {
     setItems([
       ...items,
-      { codArticulo: "", precioVentaArticulo: "", cantidadVendidaArticulo: "" },
+      { articuloId: "", precioVentaArticulo: "", cantidadVendidaArticulo: "" },
     ]);
   };
 
@@ -54,7 +54,7 @@ export default function AddVenta() {
   };
 
   // Chequea si hay OC activas (Pendiente o Enviada) para ese artículo
-  const verificarOrdenActiva = async (codArticulo) => {
+  const verificarOrdenActiva = async (articuloId) => {
     const ocSnap = await getDocs(collection(db, "OrdenCompra"));
     for (const oc of ocSnap.docs) {
       const estados = await getDocs(
@@ -79,7 +79,7 @@ export default function AddVenta() {
               "Articulo"
             )
           );
-          if (arts.docs.some((a) => a.id === codArticulo)) return true;
+          if (arts.docs.some((a) => a.id === articuloId)) return true;
         }
       }
     }
@@ -87,21 +87,21 @@ export default function AddVenta() {
   };
 
   // Si corresponde, autogenera OC para ese artículo
-  const verificarYGenerarOC = async (codArticulo) => {
+  const verificarYGenerarOC = async (articuloId) => {
     const modeloSnap = await getDocs(
-      query(collection(db, "ModeloInventario"), where("codArticulo", "==", codArticulo))
+      query(collection(db, "ModeloInventario"), where("articuloId", "==", articuloId))
     );
     if (modeloSnap.empty) return;
 
     const modelo = modeloSnap.docs[0].data();
     const modeloNombre = modelo.nombreModeloInventario;
-    const stock = articulos.find((a) => a.id === codArticulo)?.stock || 0;
+    const stock = articulos.find((a) => a.id === articuloId)?.stock || 0;
 
     if (modeloNombre === "Lote Fijo" && stock < modelo.puntoPedido) {
-      const tieneOC = await verificarOrdenActiva(codArticulo);
+      const tieneOC = await verificarOrdenActiva(articuloId);
       if (!tieneOC) {
         // Buscar proveedor predeterminado activo
-        const provArtSnap = await getDocs(collection(db, "Articulo", codArticulo, "ArticuloProveedor"));
+        const provArtSnap = await getDocs(collection(db, "Articulo", articuloId, "ArticuloProveedor"));
         const provPred = provArtSnap.docs.find(
           p => p.data().esProveedorPredeterminado && !p.data().fechaHoraBajaArticuloProveedor
         );
@@ -145,17 +145,17 @@ export default function AddVenta() {
             "DetalleOrdenCompra",
             detalleRef.id,
             "Articulo",
-            codArticulo
+            articuloId
           ),
           {
-            codArticulo,
+            articuloId,
             precioArticulo: precioUnitario,
             cantidad: modelo.loteOptimo || 1,
           }
         );
 
         // Mensaje de log en consola
-        console.log(`⚙️ OC autogenerada para ${codArticulo} con proveedor ${codProveedor}, precio unitario ${precioUnitario}`);
+        console.log(`⚙️ OC autogenerada para ${articuloId} con proveedor ${codProveedor}, precio unitario ${precioUnitario}`);
       }
     }
   };
@@ -164,7 +164,7 @@ export default function AddVenta() {
     if (items.length === 0) return alert("Agregá al menos un artículo");
 
     for (const item of items) {
-      const articulo = articulos.find((a) => a.id === item.codArticulo);
+      const articulo = articulos.find((a) => a.id === item.articuloId);
       const cantidad = parseInt(item.cantidadVendidaArticulo);
       if (!articulo) return alert("Artículo no encontrado");
       if (cantidad > articulo.stock) {
@@ -191,8 +191,8 @@ export default function AddVenta() {
     const detalleRef = collection(db, "Venta", ventaRef.id, "DetalleVenta");
 
     for (const item of items) {
-      await setDoc(doc(detalleRef, item.codArticulo), {
-        codArticulo: item.codArticulo,
+      await setDoc(doc(detalleRef, item.articuloId), {
+        articuloId: item.articuloId,
         precioVentaArticulo: parseFloat(item.precioVentaArticulo),
         cantidadVendidaArticulo: parseInt(item.cantidadVendidaArticulo),
         precioTotalVenta:
@@ -201,14 +201,14 @@ export default function AddVenta() {
       });
 
       // Actualizar stock
-      const artRef = doc(db, "Articulo", item.codArticulo);
+      const artRef = doc(db, "Articulo", item.articuloId);
       const nuevoStock =
-        articulos.find((a) => a.id === item.codArticulo).stock -
+        articulos.find((a) => a.id === item.articuloId).stock -
         parseInt(item.cantidadVendidaArticulo);
       await updateDoc(artRef, { stockActualArticulo: nuevoStock });
 
       // Verificar si se debe generar OC
-      await verificarYGenerarOC(item.codArticulo);
+      await verificarYGenerarOC(item.articuloId);
     }
 
     alert("Venta registrada exitosamente");
@@ -237,8 +237,8 @@ export default function AddVenta() {
             <div className="col-md-4">
               <select
                 className="form-select"
-                value={item.codArticulo}
-                onChange={(e) => handleItemChange(i, "codArticulo", e.target.value)}
+                value={item.articuloId}
+                onChange={(e) => handleItemChange(i, "articuloId", e.target.value)}
               >
                 <option value="">Seleccionar artículo</option>
                 {articulos.map((a) => (
