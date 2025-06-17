@@ -188,13 +188,6 @@ export default function AddOrdenPorArticulo() {
       const articulo = articulosDisponibles.find(a => a.id === item.codArticulo);
       const fecha = new Date();
 
-      // Si el usuario no seleccionó proveedor, usar el predeterminado
-      let codProveedor = item.codProveedor;
-      if (!codProveedor) {
-        const relaciones = proveedoresPorArticulo[item.codArticulo] || [];
-        const pred = relaciones.find(p => p.esProveedorPredeterminado);
-        codProveedor = pred ? pred.codProveedor : articulo.proveedorPredeterminado.codProveedor;
-      }
 
       // Buscar el precio unitario correcto según el proveedor elegido
       const relaciones = proveedoresPorArticulo[item.codArticulo] || [];

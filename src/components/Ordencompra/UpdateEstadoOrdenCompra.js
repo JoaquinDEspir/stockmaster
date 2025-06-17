@@ -19,46 +19,29 @@ export default function UpdateEstadoOrdenCompra() {
   const [cargando, setCargando] = useState(false);
 
   // SOLO MUESTRA OC activas, proveedor activo y SOLO PENDIENTES o ENVIADAS
-  useEffect(() => {
-    const fetchOrdenes = async () => {
-      const snap = await getDocs(collection(db, "OrdenCompra"));
-      const provSnap = await getDocs(collection(db, "Proveedor"));
-      const proveedoresActivos = {};
-      provSnap.docs.forEach(p => {
-        if (!p.data().fechaHoraBajaProveedor) {
-          proveedoresActivos[p.id] = true;
-        }
-      });
+  const fetchOrdenes = async () => {
+    const snap = await getDocs(collection(db, "OrdenCompra"));
+    const provSnap = await getDocs(collection(db, "Proveedor"));
+    const proveedoresActivos = {};
+    provSnap.docs.forEach(p => {
+      if (!p.data().fechaHoraBajaProveedor) {
+        proveedoresActivos[p.id] = true;
+      }
+    });
 
-      let ordenesValidas = [];
-      for (const d of snap.docs) {
-        // Filtrar baja lógica OC y proveedor
-        if (d.data().fechaHoraBajaOrdenCompra) continue;
-        if (!proveedoresActivos[d.data().codProveedor]) continue;
+    let ordenesValidas = [];
+    for (const d of snap.docs) {
+      // Filtrar baja lógica OC y proveedor
+      if (d.data().fechaHoraBajaOrdenCompra) continue;
+      if (!proveedoresActivos[d.data().codProveedor]) continue;
 
-        const estadoRef = collection(
-          db,
-          "OrdenCompra",
-          d.id,
-          "EstadoOrdenCompra"
-        );
-        const q = query(estadoRef, where("fechaHoraBajaEstadoCompra", "==", null));
-        const estadoSnap = await getDocs(q);
-        if (!estadoSnap.empty) {
-          const actual = estadoSnap.docs[0].data().nombreEstadoCompra?.trim();
-          // SOLO agrego si es PENDIENTE o ENVIADA
-          if (actual === "Pendiente" || actual === "Enviada") {
-            ordenesValidas.push({
-              id: d.id,
-              fecha: d.data().fechaHoraOrdenCompra?.toDate(),
-              estado: estadoSnap.docs[0].data().nombreEstadoCompra,
-              numeroDeOrdenCompra: d.data().numeroDeOrdenCompra 
-            });
-          }
         }
       }
-      setOrdenes(ordenesValidas);
-    };
+    }
+    setOrdenes(ordenesValidas);
+  };
+
+  useEffect(() => {
     fetchOrdenes();
   }, []);
 
@@ -141,7 +124,7 @@ export default function UpdateEstadoOrdenCompra() {
     setCargando(false);
 
     // Actualizar lista de órdenes
-    setOrdenes(ordenes.filter(o => o.id !== selectedOrdenId));
+    await fetchOrdenes(); // Refresh the list of orders
     setSelectedOrdenId("");
   };
 

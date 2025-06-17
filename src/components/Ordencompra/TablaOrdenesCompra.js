@@ -45,65 +45,82 @@ export default function TablaOrdenesCompra() {
         ordenSnap.docs
           .filter((orden) => !orden.data().fechaHoraBajaOrdenCompra)
           .map(async (orden) => {
-            const id = orden.id;
-            const { codProveedor, fechaHoraOrdenCompra } = orden.data();
+        const id = orden.id;
+        const {
+          codProveedor,
+          nombreProveedor,
+          codArticulo,
+          nombreArticulo,
+          fechaHoraOrdenCompra,
+        } = orden.data();
 
-            // Estado activo (el último sin baja)
-            const estadoSnap = await getDocs(
-              query(
-                collection(db, "OrdenCompra", id, "EstadoOrdenCompra"),
-                where("fechaHoraBajaEstadoCompra", "==", null)
-              )
-            );
-            const estado = estadoSnap.empty
-              ? "Sin estado"
-              : estadoSnap.docs[0].data().nombreEstadoCompra;
+        // Estado activo (el último sin baja)
+        const estadoSnap = await getDocs(
+          query(
+            collection(db, "OrdenCompra", id, "EstadoOrdenCompra"),
+            where("fechaHoraBajaEstadoCompra", "==", null)
+          )
+        );
+        const estado = estadoSnap.empty
+          ? "Sin estado"
+          : estadoSnap.docs[0].data().nombreEstadoCompra;
 
-            // Detalle OC
-            const detalleSnap = await getDocs(
-              collection(db, "OrdenCompra", id, "DetalleOrdenCompra")
-            );
-            if (detalleSnap.empty) {
-              console.log("OC sin DetalleOrdenCompra:", id);
-            }
-            const detalleDoc = detalleSnap.docs[0];
-            const detalleId = detalleDoc?.id;
-            const detalle = detalleDoc?.data();
-            const precioTotal = detalle?.precioTotal ?? 0;
+        // Detalle OC
+        const detalleSnap = await getDocs(
+          collection(db, "OrdenCompra", id, "DetalleOrdenCompra")
+        );
+        const detalleDoc = detalleSnap.docs[0];
+        const detalleId = detalleDoc?.id;
+        const detalle = detalleDoc?.data();
+        const precioTotal = detalle?.precioTotal ?? 0;
 
-            const articulosSnap = detalleId
-              ? await getDocs(
-                  collection(
-                    db,
-                    "OrdenCompra",
-                    id,
-                    "DetalleOrdenCompra",
-                    detalleId,
-                    "articulos"
-                  )
-                )
-              : { docs: [] };
+        const articulosSnap = detalleId
+          ? await getDocs(
+          collection(
+            db,
+            "OrdenCompra",
+            id,
+            "DetalleOrdenCompra",
+            detalleId,
+            "articulos"
+          )
+            )
+          : { docs: [] };
 
-            // Artículos activos en la OC
-            const articulosOrden = articulosSnap.docs.map((a) => ({
-              id: a.id,
-              nombre: artMap[a.id] ?? a.id,
-              ...a.data(),
-              activo: !!artMap[a.id],
-            }));
+        // Artículos activos en la OC
+        const articulosOrden = articulosSnap.docs.map((a) => ({
+          id: a.id,
+          nombre: artMap[a.id] ?? nombreArticulo ?? a.id,
+          ...a.data(),
+          activo: !!artMap[a.id],
+        }));
 
-            // Si el proveedor está de baja, igual lo mostramos e indicamos "(Baja)"
-            let proveedorLabel = provMap[codProveedor] || provBajaMap[codProveedor] || codProveedor;
-            if (provBajaMap[codProveedor]) proveedorLabel += " (Baja)";
+        // Si el proveedor está de baja, igual lo mostramos e indicamos "(Baja)"
+        let proveedorLabel =
+          proveedores[codProveedor] ||
+          proveedoresBaja[codProveedor] ||
+          nombreProveedor ||
+          codProveedor;
+        if (proveedoresBaja[codProveedor]) proveedorLabel += " (Baja)";
 
-            return {
-              id,
-              proveedor: proveedorLabel,
-              fecha: fechaHoraOrdenCompra?.toDate?.() || new Date(),
-              estado,
-              precioTotal,
-              articulos: articulosOrden,
-            };
+        return {
+          id,
+          proveedor: proveedorLabel,
+          fecha: fechaHoraOrdenCompra?.toDate?.() || new Date(),
+          estado,
+          precioTotal,
+          articulos: articulosOrden.length
+            ? articulosOrden
+            : [
+            {
+              id: codArticulo,
+              nombre: artMap[codArticulo] ?? nombreArticulo ?? codArticulo,
+              activo: !!artMap[codArticulo],
+              precioArticulo: detalle?.precioArticulo ?? 0,
+              cantidad: detalle?.cantidad ?? 0,
+            },
+          ],
+        };
           })
       );
 
@@ -146,9 +163,14 @@ export default function TablaOrdenesCompra() {
 
       {ordenesFiltradas.map((orden) => (
         <div key={orden.id} className="card mb-3 p-3">
-          <h5>Orden #{orden.id}</h5>
+          <h5><strong>Articulo:</strong> {
+            orden.articulos.length > 0
+              ? orden.articulos[0].nombre
+              : "Sin artículos"
+          }</h5>
+          <h5><strong>Proveedor:</strong> {orden.proveedor}</h5>
           <p>
-            <strong>Proveedor:</strong> {orden.proveedor}
+            <strong>Orden #</strong> {orden.id}
           </p>
           <p>
             <strong>Fecha:</strong> {orden.fecha?.toLocaleString()}
